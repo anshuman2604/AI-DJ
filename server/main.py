@@ -23,19 +23,81 @@ app.add_middleware(
 CACHE_DIR = os.path.join(os.path.dirname(__file__), "audio_cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
+import re
+import http.cookiejar
+
 COOKIE_FILE = os.path.join(os.path.dirname(__file__), "cookies.txt")
+
+def sanitize_netscape_cookies(text: str) -> str:
+    """
+    Normalizes cookies text into valid tab-separated Netscape format.
+    Fixes issues where cloud dashboards (e.g. Render, HuggingFace) or browsers
+    replace tab characters with spaces or escape newlines (\\n).
+    """
+    text = text.replace('\\r\\n', '\n').replace('\\n', '\n').replace('\r\n', '\n')
+    lines = text.split('\n')
+    reconstructed = ['# Netscape HTTP Cookie File', '# Generated & Sanitized by AI DJ']
+
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        # If line already has tabs and 7 fields
+        if '\t' in line:
+            parts = line.split('\t')
+            if len(parts) >= 7:
+                reconstructed.append('\t'.join(parts[:7]))
+                continue
+        # If line was space-separated due to web dashboard copy-paste
+        parts = re.split(r'\s+', line, maxsplit=6)
+        if len(parts) == 7:
+            reconstructed.append('\t'.join(parts))
+        elif len(parts) == 6:
+            parts.append('')
+            reconstructed.append('\t'.join(parts))
+
+    return '\n'.join(reconstructed) + '\n'
+
+def validate_or_repair_cookies(filepath: str) -> bool:
+    """
+    Validates if a cookies file can be successfully parsed by Python's MozillaCookieJar.
+    If it fails (e.g. spaces instead of tabs), it automatically repairs the file in-place.
+    """
+    cj = http.cookiejar.MozillaCookieJar()
+    try:
+        cj.load(filepath)
+        if len(cj) > 0:
+            return True
+    except Exception:
+        pass
+
+    try:
+        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+        repaired = sanitize_netscape_cookies(content)
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(repaired)
+        cj.load(filepath)
+        if len(cj) > 0:
+            logger.info(f"Successfully repaired cookie file formatting in {filepath} ({len(cj)} cookies loaded)")
+            return True
+    except Exception as err:
+        logger.warning(f"Could not load or repair cookies file {filepath}: {err}")
+
+    return False
 
 def setup_cookies():
     """
     Checks for YouTube cookies via environment variable (YOUTUBE_COOKIES / COOKIES_CONTENT)
-    or local cookies.txt file to authenticate with YouTube and prevent bot-detection blocks.
+    or local cookies.txt file, sanitizes the format, and loads it into yt-dlp.
     """
     env_cookies = os.environ.get("YOUTUBE_COOKIES") or os.environ.get("COOKIES_CONTENT")
-    if env_cookies and not (os.path.exists(COOKIE_FILE) and os.path.getsize(COOKIE_FILE) > 10):
+    if env_cookies:
         try:
+            sanitized = sanitize_netscape_cookies(env_cookies.strip())
             with open(COOKIE_FILE, "w", encoding="utf-8") as f:
-                f.write(env_cookies.strip())
-            logger.info("Successfully loaded YouTube cookies from environment variable.")
+                f.write(sanitized)
+            logger.info("Successfully loaded and sanitized YouTube cookies from environment variable.")
         except Exception as e:
             logger.warning(f"Could not write YOUTUBE_COOKIES to file: {e}")
 
@@ -46,7 +108,11 @@ def setup_cookies():
     ]
     for path in search_paths:
         if os.path.exists(path) and os.path.getsize(path) > 10:
-            return os.path.abspath(path)
+            if validate_or_repair_cookies(path):
+                return os.path.abspath(path)
+            else:
+                logger.warning(f"Cookie file at {path} could not be validated. Falling back to mobile clients.")
+
     return None
 
 def get_ydl_opts(download: bool = False, outtmpl: str = None):
