@@ -5,12 +5,7 @@ import { analyzeAudioBuffer } from './audio/audioAnalyzer';
 import { askGeminiCreativeDirector } from './ai/geminiDirector';
 import { Track, DJDecisionLog } from './types/dj';
 import { evaluatePlaylistCandidates, CandidateEvaluation, calculateTransitionPlan } from './ai/djBrain';
-import { MusicSidebar } from './components/MusicSidebar';
-import { MusicHeader } from './components/MusicHeader';
-import { AIMixStage } from './components/AIMixStage';
-import { TrackCardGrid } from './components/TrackCardGrid';
-import { ModernBottomPlayer } from './components/ModernBottomPlayer';
-import { AILogDrawer } from './components/AILogDrawer';
+import { ModernPlayerStage } from './components/ModernPlayerStage';
 import { getTrackCoverImage } from './utils/albumArt';
 
 const BACKEND_BASE = typeof window !== 'undefined'
@@ -810,89 +805,24 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-music-mesh text-slate-100 flex overflow-hidden">
-      {/* 1. Left Sidebar Navigation (Matching Screen 3 of Reference Image) */}
-      <MusicSidebar
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        isAutoDJActive={isAutoDJActive}
-        onToggleAutoDJ={handleToggleAutoDJ}
-        mixDurationMode={mixDurationMode}
-        onMixDurationModeChange={setMixDurationMode}
-        isTransitioning={isTransitioning}
-      />
-
-      {/* 2. Main Music App Experience (Matching Screen 2 of Reference Image) */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto custom-scroll pb-32">
-        {/* Top Search & Import Header */}
-        <MusicHeader
-          onImportUrl={handleImportPlaylistUrl}
-          onFileUpload={handleFileUpload}
-          isAnalyzing={isAnalyzing}
-          apiKey={apiKey}
-          onApiKeyChange={setApiKey}
-          vibePrompt={vibePrompt}
-          onVibePromptChange={setVibePrompt}
-        />
-
-        {/* Main Content Area */}
-        <main className="p-5 md:p-8 space-y-7 max-w-7xl w-full mx-auto">
-          {/* Animated AI Mix Stage / Discover Hero Banner (Animated when AI mixing!) */}
-          <AIMixStage
-            currentTrack={activeDeck === 'A' ? trackA : trackB}
-            incomingTrack={activeDeck === 'A' ? trackB : trackA}
-            isPlaying={activeDeck === 'A' ? deckAState.isPlaying : deckBState.isPlaying}
-            currentTime={activeDeck === 'A' ? deckAState.currentTime : deckBState.currentTime}
-            duration={activeDeck === 'A' ? deckAState.duration : deckBState.duration}
-            playbackRate={activeDeck === 'A' ? deckAState.playbackRate : deckBState.playbackRate}
-            crossfader={crossfader}
-            isTransitioning={isTransitioning}
-            activeRemixStyle={activeRemixStyle}
-            onPlayToggle={() => handlePlayToggle(activeDeck)}
-            onTriggerInstantMix={executeDynamicRemixMashup}
-            onSeek={(sec) => handleSeek(activeDeck, sec)}
-          />
-
-          {/* Tracks Playlist & Made for You (Screen 2 style) */}
-          <TrackCardGrid
-            playlist={playlist}
-            currentTrackId={activeDeck === 'A' ? trackA?.id : trackB?.id}
-            cuedTrackId={activeDeck === 'A' ? trackB?.id : trackA?.id}
-            playedTrackIds={playedTrackIds}
-            evaluations={evaluations}
-            isPlaying={activeDeck === 'A' ? deckAState.isPlaying : deckBState.isPlaying}
-            onPlayTrack={handleDirectPlayTrack}
-            onSelectAsNext={handleSelectAsNextForAI}
-          />
-        </main>
-      </div>
-
-      {/* 3. Floating Modern Bottom Player Dock */}
-      <ModernBottomPlayer
-        currentTrack={activeDeck === 'A' ? trackA : trackB}
-        incomingTrack={activeDeck === 'A' ? trackB : trackA}
-        isPlaying={activeDeck === 'A' ? deckAState.isPlaying : deckBState.isPlaying}
-        currentTime={activeDeck === 'A' ? deckAState.currentTime : deckBState.currentTime}
-        duration={activeDeck === 'A' ? deckAState.duration : deckBState.duration}
-        isAutoDJActive={isAutoDJActive}
-        isTransitioning={isTransitioning}
-        mixDurationMode={mixDurationMode}
-        crossfader={crossfader}
-        onPlayToggle={() => handlePlayToggle(activeDeck)}
-        onSeek={(sec) => handleSeek(activeDeck, sec)}
-        onTriggerInstantMix={executeDynamicRemixMashup}
-        onToggleAutoDJ={handleToggleAutoDJ}
-        onMixDurationModeChange={setMixDurationMode}
-        onToggleLogs={() => setIsLogsOpen(!isLogsOpen)}
-        isLogsOpen={isLogsOpen}
-      />
-
-      {/* 4. AI Decision Stream Slide-Over Drawer */}
-      <AILogDrawer
-        isOpen={isLogsOpen}
-        onClose={() => setIsLogsOpen(false)}
-        logs={logs}
-      />
-    </div>
+    <ModernPlayerStage
+      currentTrack={activeDeck === 'A' ? trackA : trackB}
+      nextTrack={activeDeck === 'A' ? trackB : trackA}
+      isPlaying={activeDeck === 'A' ? deckAState.isPlaying : deckBState.isPlaying}
+      currentTime={activeDeck === 'A' ? deckAState.currentTime : deckBState.currentTime}
+      duration={activeDeck === 'A' ? deckAState.duration : deckBState.duration}
+      isTransitioning={isTransitioning}
+      isAutoDJActive={isAutoDJActive}
+      mixDurationMode={mixDurationMode}
+      playlist={playlist}
+      onPlayToggle={() => handlePlayToggle(activeDeck)}
+      onSeek={(sec) => handleSeek(activeDeck, sec)}
+      onTriggerInstantMix={executeDynamicRemixMashup}
+      onToggleAutoDJ={handleToggleAutoDJ}
+      onModeChange={setMixDurationMode}
+      onImportUrl={handleImportPlaylistUrl}
+      onSelectTrack={handleDirectPlayTrack}
+      isAnalyzing={isAnalyzing}
+    />
   );
 }

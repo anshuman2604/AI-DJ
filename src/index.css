@@ -126,3 +126,20 @@
     radial-gradient(at 50% 100%, rgba(79, 70, 229, 0.15) 0px, transparent 50%);
 }
 
+/* Multi-layer Wave Flow Animations */
+@keyframes wave-flow {
+  0% { transform: translateX(0); }
+  50% { transform: translateX(-25%); }
+  100% { transform: translateX(0); }
+}
+.animate-wave-slow {
+  animation: wave-flow 18s ease-in-out infinite;
+}
+.animate-wave-medium {
+  animation: wave-flow 12s ease-in-out infinite reverse;
+}
+.animate-wave-fast {
+  animation: wave-flow 8s ease-in-out infinite;
+}
+
+
