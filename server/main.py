@@ -57,6 +57,8 @@ def get_ydl_opts(download: bool = False, outtmpl: str = None):
     opts = {
         'quiet': True,
         'no_warnings': True,
+        'js_runtimes': {'node': {}},
+        'remote_components': ['ejs:github'],
         'extractor_args': {
             'youtube': {
                 'player_client': ['android', 'visionos', 'ios', 'mweb', 'web']
