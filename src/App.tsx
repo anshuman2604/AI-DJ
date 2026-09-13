@@ -7,6 +7,7 @@ import { Track, DJDecisionLog } from './types/dj';
 import { evaluatePlaylistCandidates, CandidateEvaluation, calculateTransitionPlan } from './ai/djBrain';
 import { ModernPlayerStage } from './components/ModernPlayerStage';
 import { getTrackCoverImage } from './utils/albumArt';
+import { backgroundAudio } from './audio/backgroundAudio';
 
 const BACKEND_BASE = typeof window !== 'undefined'
   ? (window.location.port === '5173'
@@ -85,7 +86,7 @@ export default function App() {
     addLog('TRACK_SELECTION', 'DJ Engine ready. Paste your playlist URL above to begin autonomous mixing.');
   }, []);
 
-  // iOS Lock Screen & Control Center MediaSession Integration
+  // iOS Lock Screen, Control Center, AirPods & Bluetooth MediaSession Integration
   useEffect(() => {
     if (typeof window === 'undefined' || !('mediaSession' in navigator)) return;
 
@@ -98,7 +99,9 @@ export default function App() {
         artist: currentTrack.artist || 'AI Autonomous DJ',
         album: 'AI Live DJ Set',
         artwork: [
-          { src: getTrackCoverImage(currentTrack.id), sizes: '512x512', type: 'image/jpeg' }
+          { src: getTrackCoverImage(currentTrack.id), sizes: '512x512', type: 'image/jpeg' },
+          { src: getTrackCoverImage(currentTrack.id), sizes: '256x256', type: 'image/jpeg' },
+          { src: getTrackCoverImage(currentTrack.id), sizes: '128x128', type: 'image/jpeg' },
         ]
       });
 
@@ -106,17 +109,59 @@ export default function App() {
 
       try {
         navigator.mediaSession.setActionHandler('play', () => {
-          handlePlayToggle(activeDeck);
+          handlePlayToggle(activeDeckRef.current);
         });
         navigator.mediaSession.setActionHandler('pause', () => {
-          handlePlayToggle(activeDeck);
+          handlePlayToggle(activeDeckRef.current);
         });
         navigator.mediaSession.setActionHandler('nexttrack', () => {
           executeDynamicRemixMashup();
         });
+        navigator.mediaSession.setActionHandler('previoustrack', () => {
+          handleSeek(activeDeckRef.current, 0);
+        });
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+          if (details.seekTime !== undefined) {
+            handleSeek(activeDeckRef.current, details.seekTime);
+          }
+        });
+        navigator.mediaSession.setActionHandler('seekforward', (details) => {
+          const skip = details.seekOffset || 10;
+          const liveActive = activeDeckRef.current;
+          const cur = liveActive === 'A' ? deckAState.currentTime : deckBState.currentTime;
+          handleSeek(liveActive, cur + skip);
+        });
+        navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+          const skip = details.seekOffset || 10;
+          const liveActive = activeDeckRef.current;
+          const cur = liveActive === 'A' ? deckAState.currentTime : deckBState.currentTime;
+          handleSeek(liveActive, Math.max(0, cur - skip));
+        });
       } catch (e) {}
     }
   }, [activeDeck, trackA, trackB, deckAState.isPlaying, deckBState.isPlaying]);
+
+  // Keep WebAudio context and background audio anchor alive across app minimization & lock screen
+  useEffect(() => {
+    const handleResume = () => {
+      if (engineRef.current && (deckAState.isPlaying || deckBState.isPlaying)) {
+        if (engineRef.current.ctx.state === 'suspended') {
+          engineRef.current.ctx.resume().catch(() => {});
+        }
+        backgroundAudio.startKeepAlive(engineRef.current.ctx);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleResume);
+    window.addEventListener('focus', handleResume);
+    window.addEventListener('pageshow', handleResume);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleResume);
+      window.removeEventListener('focus', handleResume);
+      window.removeEventListener('pageshow', handleResume);
+    };
+  }, [deckAState.isPlaying, deckBState.isPlaying]);
 
   // 2. Playback Tracker & Phrase Watcher
   useEffect(() => {
@@ -137,6 +182,22 @@ export default function App() {
         currentTime: engine.deckB.getCurrentTime(),
         duration: engine.deckB.currentTrack?.duration || prev.duration,
       }));
+
+      // Sync Lock Screen & Control Center position scrubber
+      if (typeof window !== 'undefined' && 'mediaSession' in navigator && 'setPositionState' in navigator.mediaSession) {
+        const liveActive = activeDeckRef.current;
+        const currentPlayingTrack = liveActive === 'A' ? trackA : trackB;
+        const playingDeck = liveActive === 'A' ? engine.deckA : engine.deckB;
+        if (currentPlayingTrack && currentPlayingTrack.duration > 0 && playingDeck.isPlaying) {
+          try {
+            navigator.mediaSession.setPositionState({
+              duration: Math.max(1, currentPlayingTrack.duration),
+              playbackRate: playingDeck.playbackRate || 1.0,
+              position: Math.min(Math.max(0, playingDeck.getCurrentTime()), currentPlayingTrack.duration),
+            });
+          } catch (e) {}
+        }
+      }
 
       // Autonomous Musical DJ Strategy Watcher
       if (isAutoDJActive && !isTransitioning) {
@@ -571,7 +632,9 @@ export default function App() {
 
     if (deck.isPlaying) {
       deck.pause();
+      backgroundAudio.stopKeepAlive();
     } else {
+      backgroundAudio.startKeepAlive(engineRef.current.ctx);
       if (targetTrack && !targetTrack.audioBuffer) {
         const buf = await ensureTrackAudioBuffer(targetTrack);
         if (buf) deck.loadTrack(targetTrack, buf);
@@ -603,6 +666,7 @@ export default function App() {
 
   const handleSeek = (deckId: 'A' | 'B', sec: number) => {
     if (!engineRef.current) return;
+    backgroundAudio.startKeepAlive(engineRef.current.ctx);
     const deck = deckId === 'A' ? engineRef.current.deckA : engineRef.current.deckB;
     const targetTrack = deckId === 'A' ? trackA : trackB;
     if (!targetTrack) return;
@@ -621,6 +685,7 @@ export default function App() {
   const handleDirectPlayTrack = async (track: Track) => {
     if (!engineRef.current) return;
     const engine = engineRef.current;
+    backgroundAudio.startKeepAlive(engine.ctx);
     const targetDeckId = activeDeckRef.current;
     await loadTrackToDeckWithTempoSync(track, targetDeckId);
     const targetDeck = targetDeckId === 'A' ? engine.deckA : engine.deckB;
