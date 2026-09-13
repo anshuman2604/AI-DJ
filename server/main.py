@@ -129,11 +129,9 @@ def get_ydl_opts(download: bool = False, outtmpl: str = None, use_cookies: bool 
             'no_warnings': True,
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['android', 'visionos']
+                    'player_client': ['android', 'visionos', 'ios'],
+                    'player_skip': ['webpage', 'configs']
                 }
-            },
-            'http_headers': {
-                'User-Agent': 'com.google.android.youtube/19.29.37 (Linux; U; Android 14; US) gzip',
             },
             'socket_timeout': 25,
             'retries': 3,
@@ -149,10 +147,6 @@ def get_ydl_opts(download: bool = False, outtmpl: str = None, use_cookies: bool 
                     'player_client': ['web_embedded', 'web']
                 }
             },
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-                'Accept-Language': 'en-US,en;q=0.9',
-            },
             'socket_timeout': 30,
             'retries': 3,
         }
@@ -163,7 +157,9 @@ def get_ydl_opts(download: bool = False, outtmpl: str = None, use_cookies: bool 
     if not download:
         opts['skip_download'] = True
     else:
-        opts['format'] = 'ba[ext=m4a]/ba/b'
+        # Prioritize standalone m4a, fallback to progressive 360p mp4 (format 18) and 144p (format 17)
+        # Format 18 contains 44.1kHz AAC stereo audio that WebAudio decodes instantly without ffmpeg!
+        opts['format'] = 'ba[ext=m4a]/ba/b/18/17/best'
         if outtmpl:
             opts['outtmpl'] = outtmpl
 
