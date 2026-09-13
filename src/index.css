@@ -1,0 +1,128 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #0b0517;
+    color: #f3f0fa;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'SF Pro Display', Oxygen, Ubuntu, Cantarell, sans-serif;
+    overflow-x: hidden;
+  }
+}
+
+/* Custom Scrollbar for Purple Music App */
+.custom-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scroll::-webkit-scrollbar-track {
+  background: rgba(22, 11, 44, 0.5);
+  border-radius: 8px;
+}
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: rgba(168, 85, 247, 0.25);
+  border-radius: 8px;
+}
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(192, 38, 211, 0.6);
+}
+
+/* Vinyl Spin Keyframe */
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-spin-slow {
+  animation: spin-slow 4s linear infinite;
+}
+
+/* Animated Equalizer Bar Keyframes */
+@keyframes eq-bounce-1 {
+  0%, 100% { height: 20%; }
+  50% { height: 95%; }
+}
+@keyframes eq-bounce-2 {
+  0%, 100% { height: 80%; }
+  50% { height: 25%; }
+}
+@keyframes eq-bounce-3 {
+  0%, 100% { height: 40%; }
+  50% { height: 100%; }
+}
+@keyframes eq-bounce-4 {
+  0%, 100% { height: 90%; }
+  50% { height: 45%; }
+}
+
+.animate-eq-1 { animation: eq-bounce-1 0.65s ease-in-out infinite; }
+.animate-eq-2 { animation: eq-bounce-2 0.45s ease-in-out infinite; }
+.animate-eq-3 { animation: eq-bounce-3 0.75s ease-in-out infinite; }
+.animate-eq-4 { animation: eq-bounce-4 0.55s ease-in-out infinite; }
+
+/* Purple Ambient Glow Keyframes */
+@keyframes pulse-glow-purple {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(168, 85, 247, 0.35), inset 0 0 15px rgba(168, 85, 247, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(217, 70, 239, 0.7), inset 0 0 25px rgba(217, 70, 239, 0.3);
+  }
+}
+.glow-purple-pulse {
+  animation: pulse-glow-purple 2.2s infinite ease-in-out;
+}
+
+/* Active AI Mixing Energy Wave / Shimmer */
+@keyframes mixing-wave {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+.animate-mixing-wave {
+  background-size: 200% 200%;
+  animation: mixing-wave 3s ease infinite;
+}
+
+/* Neon Conduit Laser for Mixing Stage */
+@keyframes conduit-beam {
+  0% { transform: translateX(-100%); opacity: 0.2; }
+  50% { opacity: 1; }
+  100% { transform: translateX(100%); opacity: 0.2; }
+}
+.animate-conduit-beam {
+  animation: conduit-beam 1.6s infinite cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Floating Orb Ambient Glow */
+@keyframes float-orb {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-12px) scale(1.05); }
+}
+.animate-float-orb {
+  animation: float-orb 6s ease-in-out infinite;
+}
+
+/* Flame Shimmer for Peak Minute */
+@keyframes flame-shimmer {
+  0% { opacity: 0.85; transform: scaleY(1); }
+  50% { opacity: 1; transform: scaleY(1.05); }
+  100% { opacity: 0.85; transform: scaleY(1); }
+}
+.flame-shimmer {
+  animation: flame-shimmer 1.5s infinite ease-in-out;
+}
+
+/* Subtle Music App Ambient Background */
+.bg-music-mesh {
+  background-color: #0c061a;
+  background-image:
+    radial-gradient(at 0% 0%, rgba(124, 58, 237, 0.18) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(217, 70, 239, 0.15) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(79, 70, 229, 0.15) 0px, transparent 50%);
+}
+

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e0b36"/>
+      <stop offset="50%" stop-color="#2d1254"/>
+      <stop offset="100%" stop-color="#0f051d"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a855f7"/>
+      <stop offset="50%" stop-color="#ec4899"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#a855f7" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="160" fill="none" stroke="#7c3aed" stroke-width="8" opacity="0.3"/>
+  <circle cx="256" cy="256" r="120" fill="none" stroke="#a855f7" stroke-width="6" stroke-dasharray="12 8" opacity="0.5"/>
+  <!-- Glowing DJ Vinyl / Headphones Icon -->
+  <g filter="url(#shadow)">
+    <!-- Headphone Band -->
+    <path d="M140 260 C140 180, 200 120, 256 120 C312 120, 372 180, 372 260" fill="none" stroke="url(#glow)" stroke-width="24" stroke-linecap="round"/>
+    <!-- Left Ear Cup -->
+    <rect x="120" y="240" width="40" height="90" rx="20" fill="url(#glow)"/>
+    <!-- Right Ear Cup -->
+    <rect x="352" y="240" width="40" height="90" rx="20" fill="url(#glow)"/>
+    <!-- Center AI Soundwave / Lightning -->
+    <path d="M240 210 L276 210 L250 260 L282 260 L236 320 L248 274 L224 274 Z" fill="#ffffff"/>
+  </g>
+</svg>

@@ -1,0 +1,18 @@
+{
+  "name": "AI DJ - Autonomous Live Remix",
+  "short_name": "AI DJ",
+  "description": "Autonomous AI DJ with intelligent phrase beatmatching and multi-band live mashups",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#120726",
+  "theme_color": "#160830",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "48x48 72x72 96x96 128x128 192x192 256x256 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
