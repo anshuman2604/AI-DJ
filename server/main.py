@@ -1,11 +1,18 @@
 import os
 import glob
 import logging
+import shutil
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import yt_dlp
+
+try:
+    import static_ffmpeg
+    static_ffmpeg.add_paths()
+except Exception as _e:
+    pass
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ai-dj-backend")
@@ -140,16 +147,19 @@ def get_ydl_opts(download: bool = False, outtmpl: str = None, use_cookies: bool 
         opts = {
             'quiet': True,
             'no_warnings': True,
-            'js_runtimes': {'node': {}},
-            'remote_components': ['ejs:github'],
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['web_embedded', 'web']
+                    'player_client': ['android', 'visionos', 'ios', 'web_embedded'],
+                    'player_skip': ['webpage', 'configs']
                 }
             },
             'socket_timeout': 30,
             'retries': 3,
         }
+        if shutil.which('node'):
+            opts['js_runtimes'] = {'node': {}}
+            opts['remote_components'] = ['ejs:github']
+
         cookie_file = setup_cookies()
         if cookie_file:
             opts['cookiefile'] = cookie_file
@@ -309,7 +319,7 @@ def stream_audio(id: str = Query(..., description="YouTube video ID")):
             ydl.download([video_url])
         download_success = True
     except Exception as e1:
-        logger.info(f"Tier 1 (mobile) download failed for {id}: {e1}. Retrying with Tier 2 (cookies)...")
+        logger.error(f"Tier 1 (mobile) download failed for {id}: {e1}. Retrying with Tier 2 (cookies)...")
         last_err = e1
 
     # Tier 2: Fallback with cookies if Tier 1 encountered an issue
@@ -332,6 +342,44 @@ def stream_audio(id: str = Query(..., description="YouTube video ID")):
     ext = os.path.splitext(cached_file)[1].lstrip('.').lower()
     media_type = f"audio/{ext}" if ext != 'm4a' else 'audio/mp4'
     return FileResponse(cached_file, media_type=media_type)
+
+@app.get("/api/debug-stream")
+def debug_stream(id: str = Query("fw31zV1Pxbk", description="YouTube video ID to test")):
+    """
+    Diagnostic endpoint to verify environment, ffmpeg, cookies, and extraction live on Render.
+    """
+    report = {
+        "id": id,
+        "ffmpeg_in_path": shutil.which("ffmpeg"),
+        "node_in_path": shutil.which("node"),
+        "cookie_file_detected": setup_cookies(),
+        "tier1_status": "untested",
+        "tier2_status": "untested",
+    }
+    
+    # Test Tier 1
+    try:
+        ydl_opts_t1 = get_ydl_opts(download=False, use_cookies=False)
+        with yt_dlp.YoutubeDL(ydl_opts_t1) as ydl:
+            info1 = ydl.extract_info(f"https://www.youtube.com/watch?v={id}", download=False)
+            report["tier1_status"] = "SUCCESS"
+            report["tier1_title"] = info1.get("title")
+            report["tier1_format_id"] = info1.get("format_id")
+    except Exception as e:
+        report["tier1_status"] = f"FAILED: {e}"
+
+    # Test Tier 2
+    try:
+        ydl_opts_t2 = get_ydl_opts(download=False, use_cookies=True)
+        with yt_dlp.YoutubeDL(ydl_opts_t2) as ydl:
+            info2 = ydl.extract_info(f"https://www.youtube.com/watch?v={id}", download=False)
+            report["tier2_status"] = "SUCCESS"
+            report["tier2_title"] = info2.get("title")
+            report["tier2_format_id"] = info2.get("format_id")
+    except Exception as e:
+        report["tier2_status"] = f"FAILED: {e}"
+
+    return report
 
 # Serve built React frontend if dist folder exists (single-service free cloud hosting)
 dist_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dist"))
