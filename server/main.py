@@ -115,28 +115,50 @@ def setup_cookies():
 
     return None
 
-def get_ydl_opts(download: bool = False, outtmpl: str = None):
+def get_ydl_opts(download: bool = False, outtmpl: str = None, use_cookies: bool = False):
     """
-    Constructs robust yt-dlp configuration with mobile/visionos player clients
-    to bypass YouTube's datacenter IP bot detection on cloud hosting platforms.
+    Two-Tier Robust YouTube Extraction Engine:
+    - Tier 1 (use_cookies=False): Emulates Android & VisionOS InnerTube clients.
+      Bypasses datacenter bot detection completely without cookies.
+    - Tier 2 (use_cookies=True): Authenticated session with cookies + Node.js challenge solver
+      for tracks that strictly require user account access.
     """
-    opts = {
-        'quiet': True,
-        'no_warnings': True,
-        'js_runtimes': {'node': {}},
-        'remote_components': ['ejs:github'],
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'visionos', 'ios', 'mweb', 'web']
-            }
-        },
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-            'Accept-Language': 'en-US,en;q=0.9',
-        },
-        'socket_timeout': 30,
-        'retries': 5,
-    }
+    if not use_cookies:
+        opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'visionos']
+                }
+            },
+            'http_headers': {
+                'User-Agent': 'com.google.android.youtube/19.29.37 (Linux; U; Android 14; US) gzip',
+            },
+            'socket_timeout': 25,
+            'retries': 3,
+        }
+    else:
+        opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'js_runtimes': {'node': {}},
+            'remote_components': ['ejs:github'],
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['web_embedded', 'web']
+                }
+            },
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9',
+            },
+            'socket_timeout': 30,
+            'retries': 3,
+        }
+        cookie_file = setup_cookies()
+        if cookie_file:
+            opts['cookiefile'] = cookie_file
 
     if not download:
         opts['skip_download'] = True
@@ -145,17 +167,12 @@ def get_ydl_opts(download: bool = False, outtmpl: str = None):
         if outtmpl:
             opts['outtmpl'] = outtmpl
 
-    cookie_file = setup_cookies()
-    if cookie_file:
-        opts['cookiefile'] = cookie_file
-        logger.info(f"Using cookies from: {cookie_file}")
-
     proxy = os.environ.get("YOUTUBE_PROXY") or os.environ.get("HTTP_PROXY") or os.environ.get("HTTPS_PROXY")
     if proxy:
         opts['proxy'] = proxy
 
     po_token = os.environ.get("YOUTUBE_PO_TOKEN")
-    if po_token:
+    if po_token and 'youtube' in opts.get('extractor_args', {}):
         opts['extractor_args']['youtube']['po_token'] = [f"web.gvs+{po_token}"]
 
     return opts
@@ -194,59 +211,80 @@ def calculate_most_played_from_heatmap(heatmap, window_sec=60.0):
 
 @app.get("/api/resolve")
 def resolve_url(url: str = Query(..., description="YouTube video or playlist URL")):
+    info = None
+    last_err = None
+
+    # Tier 1: Mobile InnerTube (no cookies, bypasses bot detection)
     try:
-        opts = get_ydl_opts(download=False)
+        opts = get_ydl_opts(download=False, use_cookies=False)
         opts['extract_flat'] = 'in_playlist'
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
-            tracks = []
-            if 'entries' in info:
-                for entry in info['entries']:
-                    if not entry:
-                        continue
-                    tracks.append({
-                        "id": entry.get("id"),
-                        "title": entry.get("title", "Unknown Title"),
-                        "artist": entry.get("uploader", "YouTube Artist"),
-                        "duration": entry.get("duration", 180),
-                        "url": f"https://www.youtube.com/watch?v={entry.get('id')}"
-                    })
-            else:
-                heatmap = info.get("heatmap") or []
-                most_played = calculate_most_played_from_heatmap(heatmap)
-                tracks.append({
-                    "id": info.get("id"),
-                    "title": info.get("title", "Unknown Title"),
-                    "artist": info.get("uploader", "YouTube Artist"),
-                    "duration": info.get("duration", 180),
-                    "url": url,
-                    "most_played": most_played
-                })
+    except Exception as e1:
+        logger.info(f"Tier 1 (mobile) resolve failed for {url}: {e1}. Retrying with Tier 2 (cookies)...")
+        last_err = e1
 
-            return {"success": True, "count": len(tracks), "tracks": tracks}
-    except Exception as e:
-        logger.error(f"Failed to resolve URL {url}: {e}")
-        err_msg = str(e)
-        if "Sign in to confirm you’re not a bot" in err_msg:
-            err_msg += " (Tip: On cloud datacenter IPs, configure YOUTUBE_COOKIES secret or upload cookies.txt)"
-        raise HTTPException(status_code=400, detail=err_msg)
+    # Tier 2: Authenticated with cookies
+    if not info:
+        try:
+            opts = get_ydl_opts(download=False, use_cookies=True)
+            opts['extract_flat'] = 'in_playlist'
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+        except Exception as e2:
+            logger.error(f"Failed to resolve URL {url}: {e2}")
+            err_msg = str(e2 or last_err)
+            raise HTTPException(status_code=400, detail=err_msg)
+
+    tracks = []
+    if 'entries' in info:
+        for entry in info['entries']:
+            if not entry:
+                continue
+            tracks.append({
+                "id": entry.get("id"),
+                "title": entry.get("title", "Unknown Title"),
+                "artist": entry.get("uploader", "YouTube Artist"),
+                "duration": entry.get("duration", 180),
+                "url": f"https://www.youtube.com/watch?v={entry.get('id')}"
+            })
+    else:
+        heatmap = info.get("heatmap") or []
+        most_played = calculate_most_played_from_heatmap(heatmap)
+        tracks.append({
+            "id": info.get("id"),
+            "title": info.get("title", "Unknown Title"),
+            "artist": info.get("uploader", "YouTube Artist"),
+            "duration": info.get("duration", 180),
+            "url": url,
+            "most_played": most_played
+        })
+
+    return {"success": True, "count": len(tracks), "tracks": tracks}
 
 @app.get("/api/track-meta")
 def get_track_meta(id: str = Query(..., description="YouTube video ID")):
+    info = None
     try:
-        opts = get_ydl_opts(download=False)
+        opts = get_ydl_opts(download=False, use_cookies=False)
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(f"https://www.youtube.com/watch?v={id}", download=False)
-            heatmap = info.get('heatmap') or []
-            most_played = calculate_most_played_from_heatmap(heatmap)
-            return {
-                "id": id,
-                "duration": info.get('duration', 180),
-                "most_played": most_played
-            }
-    except Exception as e:
-        logger.warning(f"Failed to fetch track meta for {id}: {e}")
-        return {"id": id, "most_played": None}
+    except Exception:
+        try:
+            opts = get_ydl_opts(download=False, use_cookies=True)
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(f"https://www.youtube.com/watch?v={id}", download=False)
+        except Exception as e:
+            logger.warning(f"Failed to fetch track meta for {id}: {e}")
+            return {"id": id, "most_played": None}
+
+    heatmap = (info.get('heatmap') if info else None) or []
+    most_played = calculate_most_played_from_heatmap(heatmap)
+    return {
+        "id": id,
+        "duration": info.get('duration', 180) if info else 180,
+        "most_played": most_played
+    }
 
 @app.get("/api/stream")
 def stream_audio(id: str = Query(..., description="YouTube video ID")):
@@ -265,26 +303,39 @@ def stream_audio(id: str = Query(..., description="YouTube video ID")):
     video_url = f"https://www.youtube.com/watch?v={id}"
     target_pattern = os.path.join(CACHE_DIR, f"{id}.%(ext)s")
 
-    ydl_opts = get_ydl_opts(download=True, outtmpl=target_pattern)
+    download_success = False
+    last_err = None
 
+    # Tier 1: Mobile InnerTube (bypasses bot verification without cookies)
     try:
+        ydl_opts = get_ydl_opts(download=True, outtmpl=target_pattern, use_cookies=False)
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([video_url])
+        download_success = True
+    except Exception as e1:
+        logger.info(f"Tier 1 (mobile) download failed for {id}: {e1}. Retrying with Tier 2 (cookies)...")
+        last_err = e1
 
-        new_matches = glob.glob(os.path.join(CACHE_DIR, f"{id}.*"))
-        if not new_matches:
-            raise HTTPException(status_code=404, detail="Audio file could not be downloaded")
+    # Tier 2: Fallback with cookies if Tier 1 encountered an issue
+    if not download_success:
+        try:
+            ydl_opts_tier2 = get_ydl_opts(download=True, outtmpl=target_pattern, use_cookies=True)
+            with yt_dlp.YoutubeDL(ydl_opts_tier2) as ydl:
+                ydl.download([video_url])
+            download_success = True
+        except Exception as e2:
+            logger.error(f"Tier 2 stream download failed for {id}: {e2}")
+            err_msg = str(e2 or last_err)
+            raise HTTPException(status_code=500, detail=err_msg)
 
-        cached_file = new_matches[0]
-        ext = os.path.splitext(cached_file)[1].lstrip('.').lower()
-        media_type = f"audio/{ext}" if ext != 'm4a' else 'audio/mp4'
-        return FileResponse(cached_file, media_type=media_type)
-    except Exception as e:
-        logger.error(f"Stream download failed for {id}: {e}")
-        err_msg = str(e)
-        if "Sign in to confirm you’re not a bot" in err_msg:
-            err_msg += " (Tip: YouTube blocked the cloud host IP as a bot. Provide cookies.txt or set YOUTUBE_COOKIES environment secret)"
-        raise HTTPException(status_code=500, detail=err_msg)
+    new_matches = glob.glob(os.path.join(CACHE_DIR, f"{id}.*"))
+    if not new_matches:
+        raise HTTPException(status_code=404, detail="Audio file could not be downloaded")
+
+    cached_file = new_matches[0]
+    ext = os.path.splitext(cached_file)[1].lstrip('.').lower()
+    media_type = f"audio/{ext}" if ext != 'm4a' else 'audio/mp4'
+    return FileResponse(cached_file, media_type=media_type)
 
 # Serve built React frontend if dist folder exists (single-service free cloud hosting)
 dist_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dist"))
