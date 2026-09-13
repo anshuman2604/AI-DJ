@@ -26,3 +26,5 @@ __pycache__/
 *.pyc
 server/audio_cache/
 audio_cache/
+*cookies*.txt
+cookies.txt

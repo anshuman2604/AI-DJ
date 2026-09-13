@@ -11,9 +11,10 @@ RUN npm run build
 FROM python:3.11-slim
 WORKDIR /app
 
-# Install ffmpeg for yt-dlp audio decoding and stream handling
+# Install ffmpeg and nodejs for yt-dlp audio decoding and JS challenge solving
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    nodejs \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
