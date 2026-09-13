@@ -25,3 +25,4 @@ dist-ssr
 __pycache__/
 *.pyc
 server/audio_cache/
+audio_cache/
